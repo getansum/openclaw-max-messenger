@@ -1,5 +1,40 @@
 # openclaw-max-messenger
 
+Maintained fork: [getansum/openclaw-max-messenger](https://github.com/getansum/openclaw-max-messenger),
+based on [alexeyavdey/openclaw-max-messenger](https://github.com/alexeyavdey/openclaw-max-messenger).
+Upstream author and MIT attribution are retained.
+
+## Read receipts and typing
+
+Authorized inbound messages start chat/account-scoped activity before attachment
+downloads and agent execution. `typing_on` is refreshed every four seconds; refresh
+stops on reply completion, silent reply, error, or account shutdown. Overlapping
+turns in the same chat share one loop; other chats/accounts are independent.
+
+```json
+{"channels":{"max":{"accounts":{"default":{
+  "token":"YOUR_BOT_TOKEN",
+  "dmPolicy":"pairing",
+  "readReceipts":true,
+  "typingEnabled":true,
+  "typingIntervalMs":4000
+}}}}}
+```
+
+`typing_on` is documented at
+[POST /chats/{chatId}/actions](https://dev.max.ru/docs-api/methods/POST/chats/-chatId-/actions).
+MAX documents no `typing_off`: the reply/expiration clears the indicator after
+refresh stops. `mark_seen` is **experimental**: absent from the public SenderAction
+enum, but the live API confirmed `{ "success": true }` on 2026-10-02. Set
+`readReceipts:false` to disable it. Failures are logged without credentials and do
+not prevent the assistant's reply. Blocked/pending-pairing senders do not trigger
+either action.
+
+Local media access resolves aliases and roots canonically: a staged PDF alias
+inside an authorized root is accepted; a symlink escaping that root is rejected.
+Prefer the core `message` tool for file delivery. The legacy `max_send_file` tool
+uses a global last-chat context and should remain disabled in multi-user setups.
+
 [OpenClaw](https://openclaw.ai) channel plugin for **Max Messenger** (max.ru) via Bot API.
 
 Connect your OpenClaw AI agents to Max Messenger — send and receive messages, files, images, audio, and video.

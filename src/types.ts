@@ -11,6 +11,9 @@ export interface MaxAccountConfig {
   accountId?: string | null;
   dmPolicy?: string;
   allowFrom?: Array<string | number>;
+  readReceipts?: boolean;
+  typingEnabled?: boolean;
+  typingIntervalMs?: number;
 }
 
 export interface MaxChannelsConfig {

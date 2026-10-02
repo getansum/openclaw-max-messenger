@@ -256,6 +256,22 @@
                   "type": "string",
                   "format": "uri",
                   "description": "Bot API base URL (default https://platform-api2.max.ru). Media uploads and attachment downloads are not routed through it."
+                },
+                "readReceipts": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Send mark_seen for authorized messages. Experimental: accepted by MAX but not in the public SenderAction enum."
+                },
+                "typingEnabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Refresh the documented typing_on action while handling an authorized message."
+                },
+                "typingIntervalMs": {
+                  "type": "integer",
+                  "minimum": 2000,
+                  "maximum": 10000,
+                  "default": 4000
                 }
               }
             }

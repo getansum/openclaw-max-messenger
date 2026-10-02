@@ -15,9 +15,12 @@ export type MediaAccessContext = {
 
 export function isPathInsideRoots(filePath: string, roots: readonly string[]): boolean {
   if (!roots.length) return false;
-  const resolved = path.resolve(filePath);
+  // SDK выдаёт канонические roots, но staged-вложение может иметь старый
+  // путь через alias. Канонизировать обе стороны и проверить именно цель ссылки.
+  const canonical = (value: string) => fs.existsSync(value) ? fs.realpathSync(value) : path.resolve(value);
+  const resolved = canonical(filePath);
   return roots.some((root) => {
-    const normalized = path.resolve(root);
+    const normalized = canonical(root);
     return resolved === normalized || resolved.startsWith(normalized + path.sep);
   });
 }

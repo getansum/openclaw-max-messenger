@@ -247,3 +247,11 @@ routing, and the `max_send_file` tool.
 [0.3.0]: https://github.com/alexeyavdey/openclaw-max-messenger/releases/tag/v0.3.0
 [0.2.0]: https://github.com/alexeyavdey/openclaw-max-messenger/releases/tag/v0.2.0
 [0.1.0]: https://github.com/alexeyavdey/openclaw-max-messenger/releases/tag/v0.1.0
+# 0.7.0 — maintained fork (2026-10-02)
+
+- Read receipts (`mark_seen`, experimental) and documented `typing_on` refresh
+  for authorized messages, scoped to account/chat with reference-counted teardown.
+- Stop timers and in-flight action requests on completion/error/account shutdown.
+- Resolve local media aliases canonically so staged PDF/image delivery retains
+  the host's media-root boundary.
+- SDK build/typecheck pinned to OpenClaw 2026.9.7, with lifecycle and media tests.

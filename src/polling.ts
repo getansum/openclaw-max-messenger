@@ -2,6 +2,7 @@ import { Bot } from "@maxhub/max-bot-api";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { handleMaxInbound } from "./inbound.js";
 import { registerBot, unregisterBot } from "./registry.js";
+import { maxActivity } from "./activity.js";
 import type { MaxAccountConfig, InboundAttachment, PluginLogger } from "./types.js";
 
 interface RawAttachment {
@@ -282,6 +283,7 @@ function runWithRestart(ctx: AccountContext, state: AccountState, attempt = 0): 
 }
 
 function stopAccountState(accountId: string, state: AccountState): void {
+  maxActivity.stopAccount(accountId);
   state.stopped = true;
   if (state.restartTimer) {
     clearTimeout(state.restartTimer);

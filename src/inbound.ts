@@ -16,6 +16,7 @@ import { getApi } from "./registry.js";
 import { uploadAttachment, resolveUploadType, stripMaxPrefix } from "./upload-file.js";
 import { fetchRemoteMedia, isPathInsideRoots } from "./media-access.js";
 import { recordLastUsedContext } from "./send-file-tool.js";
+import { maxActivity } from "./activity.js";
 import type { InboundMessage, MaxAccountConfig } from "./types.js";
 
 const CHANNEL_ID = "max" as const;
@@ -215,6 +216,10 @@ export async function handleMaxInbound(params: {
   // Only an authorized sender may become the target that max_send_file writes to.
   recordLastUsedContext(Number(chatId), account.token);
 
+  const stopActivity = await maxActivity.begin(accountId, account, Number(chatId),
+    (warning) => runtime?.log?.(warning));
+  try {
+
   let rawBody = text;
   if (message.attachments?.length) {
     const fileDescriptions = await collectInboundAttachments(message, accountId);
@@ -320,4 +325,8 @@ export async function handleMaxInbound(params: {
       );
     },
   });
+  } finally {
+    // MAX не документирует typing_off: прекращаем refresh; ответ/TTL снимает метку.
+    stopActivity();
+  }
 }
