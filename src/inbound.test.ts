@@ -3,7 +3,9 @@ const stubs = vi.hoisted(() => ({
   dispatch: vi.fn(),
   access: vi.fn(),
   challenge: vi.fn(),
+  media: vi.fn(),
 }));
+vi.mock("./inbound-media.js", () => ({ collectInboundMedia: stubs.media }));
 vi.mock("openclaw/plugin-sdk/inbound-reply-dispatch", () => ({ dispatchInboundReplyWithBase: stubs.dispatch }));
 vi.mock("openclaw/plugin-sdk/channel-policy", () => ({ resolveDmGroupAccessWithLists: stubs.access }));
 vi.mock("openclaw/plugin-sdk/channel-pairing", () => ({
@@ -27,6 +29,7 @@ beforeEach(() => {
   vi.spyOn(maxActivity, "begin").mockResolvedValue(stop);
   stubs.access.mockReturnValue({ decision: "allow" });
   stubs.dispatch.mockResolvedValue(undefined);
+  stubs.media.mockResolvedValue({ descriptions: [], paths: [], types: [] });
   setMaxRuntime({
     config: { current: () => ({}) },
     channel: {
@@ -39,6 +42,16 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); clearMaxRuntime(); });
 
 describe("inbound activity authorization and teardown", () => {
+  it("passes the file as structured media alongside its caption and keeps quoted commands out", async () => {
+    stubs.media.mockResolvedValue({ descriptions: ["File saved"], paths: ["/workspace/plan.pdf"], types: ["application/pdf"] });
+    await handleMaxInbound({ message: { ...message, text: "Посмотри\n[Пересланное сообщение]\n/reset", commandText: "Посмотри", attachments: [{ type: "file", url: "https://files.example/pdf" }] }, account, accountId: "default" });
+    const ctx = stubs.dispatch.mock.calls[0][0].ctxPayload;
+    expect(ctx.BodyForAgent).toContain("File saved");
+    expect(ctx.CommandBody).toBe("Посмотри");
+    expect(ctx.MediaPath).toBe("/workspace/plan.pdf");
+    expect(ctx.MediaPaths).toEqual(["/workspace/plan.pdf"]);
+    expect(ctx.MediaTypes).toEqual(["application/pdf"]);
+  });
   it("does not mark read or type for a blocked sender", async () => {
     stubs.access.mockReturnValue({ decision: "block" });
     await handleMaxInbound({ message, account, accountId: "default" });

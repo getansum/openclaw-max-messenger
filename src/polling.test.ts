@@ -33,6 +33,8 @@ class MockBot {
 }
 
 vi.mock("@maxhub/max-bot-api", () => ({ Bot: MockBot }));
+const inbound = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("./inbound.js", () => ({ handleMaxInbound: inbound }));
 
 const { startPolling, stopPolling } = await import("./polling.js");
 const { getApi, clearRegistry } = await import("./registry.js");
@@ -51,6 +53,20 @@ afterEach(() => {
 });
 
 describe("startPolling", () => {
+  it("passes a forwarded file from LinkedMessage.message without changing sender or chat", async () => {
+    await startPolling({ accounts: { default: { token: "tok-a" } }, logger });
+    const handler = botInstances[0].handlers.get("message_created") as (ctx: unknown) => void;
+    handler({ chatId: 123, user: { user_id: 456 }, message: {
+      body: { mid: "outer", text: "Посмотри" },
+      link: { type: "forward", sender: { user_id: 999 }, message: {
+        text: "Оригинал", attachments: [{ type: "file", filename: "План.pdf", payload: { url: "https://files.example/plan" } }],
+      } },
+    } });
+    expect(inbound).toHaveBeenCalledWith(expect.objectContaining({ message: expect.objectContaining({
+      userId: "456", chatId: "123", messageId: "outer", commandText: "Посмотри",
+      attachments: [expect.objectContaining({ filename: "План.pdf" })],
+    }) }));
+  });
   it("attaches handlers to every bot it creates", async () => {
     await startPolling({ accounts: { default: { token: "tok-a" } }, logger });
 

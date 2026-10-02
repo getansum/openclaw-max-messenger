@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { dispatchInboundReplyWithBase } from "openclaw/plugin-sdk/inbound-reply-dispatch";
 import {
   resolveOutboundMediaUrls,
@@ -17,31 +16,15 @@ import { uploadAttachment, resolveUploadType, stripMaxPrefix } from "./upload-fi
 import { fetchRemoteMedia, isPathInsideRoots } from "./media-access.js";
 import { recordLastUsedContext } from "./send-file-tool.js";
 import { maxActivity } from "./activity.js";
+import { collectInboundMedia } from "./inbound-media.js";
 import type { InboundMessage, MaxAccountConfig } from "./types.js";
 
 const CHANNEL_ID = "max" as const;
-
-/** Cap inbound downloads: senders control both the count and the size. */
-const MAX_INBOUND_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-const MAX_INBOUND_ATTACHMENTS = 10;
 
 /** Policy applied when the account config names none. Matches the default that
  *  security.resolveDmPolicy reports to core, so status cannot claim a gate that
  *  inbound does not enforce. */
 const DEFAULT_DM_POLICY = "pairing";
-
-async function saveInboundFile(
-  buffer: Buffer,
-  filename: string,
-  accountId: string,
-): Promise<string> {
-  const dir = path.join(os.homedir(), ".openclaw", "media", "max", accountId);
-  await fs.promises.mkdir(dir, { recursive: true });
-  const safeName = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-  const filePath = path.join(dir, safeName);
-  await fs.promises.writeFile(filePath, buffer);
-  return filePath;
-}
 
 async function deliverMaxReply(params: {
   payload: OutboundReplyPayload;
@@ -119,33 +102,6 @@ async function deliverMaxReply(params: {
   }
 }
 
-/** Download inbound attachments and describe them for the agent. */
-async function collectInboundAttachments(
-  message: InboundMessage,
-  accountId: string,
-): Promise<string[]> {
-  const descriptions: string[] = [];
-  const attachments = (message.attachments ?? []).slice(0, MAX_INBOUND_ATTACHMENTS);
-
-  for (const att of attachments) {
-    if (!att.url) continue;
-    const label = att.filename || att.type || "file";
-    try {
-      const { buffer } = await fetchRemoteMedia(att.url);
-      if (buffer.byteLength > MAX_INBOUND_ATTACHMENT_BYTES) {
-        descriptions.push(`[Attached ${att.type}: ${label} (too large, skipped)]`);
-        continue;
-      }
-      const savedPath = await saveInboundFile(buffer, label, accountId);
-      descriptions.push(`[Attached ${att.type}: ${label}, saved to: ${savedPath}]`);
-    } catch {
-      descriptions.push(`[Attached ${att.type}: ${label} (download failed)]`);
-    }
-  }
-
-  return descriptions;
-}
-
 export async function handleMaxInbound(params: {
   message: InboundMessage;
   account: MaxAccountConfig;
@@ -221,13 +177,11 @@ export async function handleMaxInbound(params: {
   try {
 
   let rawBody = text;
-  if (message.attachments?.length) {
-    const fileDescriptions = await collectInboundAttachments(message, accountId);
-    if (fileDescriptions.length) {
+  const media = await collectInboundMedia(message, accountId);
+  if (media.descriptions.length) {
       rawBody = rawBody
-        ? `${rawBody}\n\n${fileDescriptions.join("\n")}`
-        : fileDescriptions.join("\n");
-    }
+        ? `${rawBody}\n\n${media.descriptions.join("\n")}`
+        : media.descriptions.join("\n");
   }
 
   if (!rawBody) {
@@ -278,7 +232,11 @@ export async function handleMaxInbound(params: {
     Body: body,
     BodyForAgent: rawBody,
     RawBody: rawBody,
-    CommandBody: rawBody,
+    CommandBody: message.commandText ?? text,
+    ...(media.paths.length ? {
+      MediaPath: media.paths[0], MediaType: media.types[0],
+      MediaPaths: media.paths, MediaTypes: media.types,
+    } : {}),
     From: isGroup ? `max:group:${chatId}` : `max:${senderId}`,
     To: `max:${chatId}`,
     SessionKey: route.sessionKey,

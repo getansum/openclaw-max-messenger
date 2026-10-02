@@ -49,6 +49,8 @@ export interface InboundAttachment {
   token?: string;
   filename?: string;
   size?: number;
+  mimeType?: string;
+  fileId?: string;
 }
 
 export interface InboundMessage {
@@ -58,6 +60,8 @@ export interface InboundMessage {
   userId: string;
   messageId: string;
   text: string;
+  /** Только собственный текст отправителя, без команд из цитаты/пересылки. */
+  commandText?: string;
   timestamp: number;
   username?: string;
   displayName?: string;

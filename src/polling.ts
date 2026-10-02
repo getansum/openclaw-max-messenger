@@ -1,20 +1,12 @@
 import { Bot } from "@maxhub/max-bot-api";
+import { randomUUID } from "node:crypto";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { handleMaxInbound } from "./inbound.js";
 import { registerBot, unregisterBot } from "./registry.js";
 import { maxActivity } from "./activity.js";
-import type { MaxAccountConfig, InboundAttachment, PluginLogger } from "./types.js";
-
-interface RawAttachment {
-  type: string;
-  payload?: { url?: string; token?: string };
-  filename?: string;
-  size?: number;
-}
-
-const SUPPORTED_ATTACHMENT_TYPES = new Set([
-  "image", "video", "audio", "file", "sticker", "contact", "location", "share",
-]);
+import type { MaxAccountConfig, PluginLogger } from "./types.js";
+import { extractMessageContent } from "./message-content.js";
+export { extractAttachments } from "./message-content.js";
 
 // UpdateType is not re-exported by the package, so take it from the public
 // start() signature instead of reaching into the SDK's internal paths.
@@ -22,31 +14,6 @@ type PollingStart = Extract<NonNullable<Parameters<Bot["start"]>[0]>, { mode: "p
 type AllowedUpdates = NonNullable<NonNullable<PollingStart["options"]>["allowedUpdates"]>;
 
 const DEFAULT_ALLOWED_UPDATES: AllowedUpdates = ["message_created", "bot_started"];
-
-export function extractAttachments(
-  rawAttachments: RawAttachment[] | null | undefined
-): InboundAttachment[] | undefined {
-  if (!rawAttachments?.length) return undefined;
-
-  const result = rawAttachments
-    .filter((a) => SUPPORTED_ATTACHMENT_TYPES.has(a.type))
-    .map((a): InboundAttachment => {
-      const attachment: InboundAttachment = {
-        type: a.type as InboundAttachment["type"],
-        url: a.payload?.url,
-        token: a.payload?.token,
-      };
-
-      if (a.type === "file") {
-        attachment.filename = a.filename;
-        attachment.size = a.size;
-      }
-
-      return attachment;
-    });
-
-  return result.length ? result : undefined;
-}
 
 type AccountState = {
   bot: Bot;
@@ -117,28 +84,28 @@ function createBot(ctx: AccountContext): Bot {
 
   bot.on("message_created", (botCtx: unknown) => {
     const c = botCtx as Record<string, unknown>;
-    const chatId = c.chatId as number | undefined;
-    const user = c.user as Record<string, unknown> | undefined;
+    const update = c.update as Record<string, unknown> | undefined;
+    const message = (c.message ?? update?.message) as Record<string, unknown> | undefined;
+    const recipient = message?.recipient as Record<string, unknown> | undefined;
+    const chatId = (c.chatId ?? recipient?.chat_id) as number | undefined;
+    const user = (c.user ?? message?.sender) as Record<string, unknown> | undefined;
     const userId = user?.user_id as number | undefined;
-    const messageId = c.messageId as number | undefined;
+    const messageId = c.messageId as string | number | undefined;
     const myId = c.myId as number | undefined;
 
     if (!chatId || !userId) return;
 
     // Ignore messages sent by the bot itself
     const selfId = myId ?? (config.botId ? Number(config.botId) : undefined);
-    if (selfId && userId === selfId) return;
+    if (user?.is_bot || (selfId && userId === selfId)) return;
 
-    const message = c.message as Record<string, unknown> | undefined;
     const body = message?.body as Record<string, unknown> | undefined;
-    const text = (body?.text as string) ?? "";
-    const attachments = extractAttachments(
-      body?.attachments as RawAttachment[] | null
-    );
+    const { text, attachments, commandText, forwarded, linkedAttachmentCount } = extractMessageContent(message);
 
     if (!text && !attachments?.length) return;
 
     const chat = c.chat as Record<string, unknown> | undefined;
+    logger.debug(`Max inbound account=${accountId} chat=${chatId} attachments=${attachments?.length ?? 0} linkedAttachments=${linkedAttachmentCount} forwarded=${forwarded}`);
 
     handleMaxInbound({
       message: {
@@ -146,9 +113,10 @@ function createBot(ctx: AccountContext): Bot {
         accountId,
         chatId: String(chatId),
         userId: String(userId),
-        messageId: String(messageId),
+        messageId: String(body?.mid ?? messageId ?? `update_${randomUUID()}`),
         text,
-        timestamp: Date.now(),
+        commandText,
+        timestamp: typeof message?.timestamp === "number" ? message.timestamp : Date.now(),
         username: user?.username as string | undefined,
         displayName: user?.name as string | undefined,
         isGroup: chat?.type !== "dialog",

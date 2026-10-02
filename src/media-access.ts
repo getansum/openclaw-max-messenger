@@ -49,14 +49,35 @@ export async function readLocalMedia(
 /** Fetch remote media through the SDK guard so a URL cannot reach internal hosts. */
 export async function fetchRemoteMedia(
   url: string,
+  options: { maxBytes?: number } = {},
 ): Promise<{ buffer: Buffer; contentType: string }> {
   const { response, release } = await fetchWithSsrFGuard({ url });
   try {
     if (!response.ok) {
       throw new Error(`Failed to download media: ${response.status}`);
     }
+    const maxBytes = options.maxBytes;
+    const length = Number(response.headers.get("content-length"));
+    if (maxBytes !== undefined && length > maxBytes) throw new Error("Media exceeds size limit");
+    let buffer: Buffer;
+    if (maxBytes !== undefined && response.body) {
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let bytes = 0;
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          bytes += chunk.value.byteLength;
+          if (bytes > maxBytes) throw new Error("Media exceeds size limit");
+          chunks.push(chunk.value);
+        }
+      } finally { await reader.cancel(); }
+      buffer = Buffer.concat(chunks, bytes);
+    } else buffer = Buffer.from(await response.arrayBuffer());
+    if (maxBytes !== undefined && buffer.byteLength > maxBytes) throw new Error("Media exceeds size limit");
     return {
-      buffer: Buffer.from(await response.arrayBuffer()),
+      buffer,
       contentType: response.headers.get("content-type") || "",
     };
   } finally {

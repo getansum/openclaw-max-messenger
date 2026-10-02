@@ -4,6 +4,23 @@ Maintained fork: [getansum/openclaw-max-messenger](https://github.com/getansum/o
 based on [alexeyavdey/openclaw-max-messenger](https://github.com/alexeyavdey/openclaw-max-messenger).
 Upstream author and MIT attribution are retained.
 
+## Incoming files and forwarded messages
+
+Direct files, files with captions, forwarded files (including a null outer
+message body), and replies referring to files are normalized before dispatch.
+MAX puts a forwarded `MessageBody` in `link.message`; the plugin also accepts
+the full linked-message envelope. Captions are preserved, repeated attachments
+are downloaded once, and the actual sender/chat never comes from the forward.
+Forwarded/quoted text is not interpreted as an operator command.
+
+Downloads preserve readable filenames and MIME types, detect PDF/images by
+content, and use unique canonical local paths. The OpenClaw context contains
+`MediaPath/MediaPaths` and `MediaType/MediaTypes`, not only a text description.
+The limit is 25 MiB per file and ten attachments per message; it is enforced
+while streaming. Missing URLs, failed downloads and skipped oversize files
+remain visible in the message context instead of disappearing silently.
+Link previews are described as links, never presented as downloaded documents.
+
 ## Read receipts and typing
 
 Authorized inbound messages start chat/account-scoped activity before attachment

@@ -255,3 +255,10 @@ routing, and the `max_send_file` tool.
 - Resolve local media aliases canonically so staged PDF/image delivery retains
   the host's media-root boundary.
 - SDK build/typecheck pinned to OpenClaw 2026.9.7, with lifecycle and media tests.
+# 0.8.0 — reliable inbound files (2026-10-02)
+
+- Extract direct, captioned, forwarded and replied-to attachments, including
+  LinkedMessage.message as MessageBody and null outer bodies.
+- Preserve sender/chat authority and keep quoted/forwarded commands out of CommandBody.
+- Populate structured OpenClaw media context, preserve filenames/MIME types,
+  enforce bounded downloads, and make failures visible to the agent.
